@@ -1,8 +1,8 @@
 # 🔌 PEDE API Reference
 
-PEDE menyediakan REST API berbasis **FastAPI** ringan yang menjembatani aplikasi eksternal (seperti backend Golang Anda) dengan mesin *Semantic Search* Qdrant.
+PEDE menyediakan REST API berbasis **FastAPI** ringan yang menjembatani aplikasi eksternal dengan mesin *Semantic Search* Qdrant.
 
-API ini akan secara otomatis memuat model *embedding* (Nomic-AI) ke dalam memori untuk memastikan proses vektorisasi berjalan dalam hitungan milidetik.
+API ini akan secara otomatis memuat model *embedding* Transformer (`sentence-transformers/all-MiniLM-L6-v2`) ke dalam memori untuk membuat vektor query pencarian.
 
 ---
 

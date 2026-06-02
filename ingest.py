@@ -24,7 +24,7 @@ cache_dir = os.path.join(
     ".cache", 
     "huggingface", 
     "hub", 
-    "models--BAAI--bge-m3"
+    "models--sentence-transformers--all-MiniLM-L6-v2"
 )
 if os.path.exists(cache_dir):
     os.environ["HF_HUB_OFFLINE"] = "1"

@@ -1,157 +1,225 @@
-# 📄 PEDE — PDF to Model Embedding
+# PEDE - PDF to Model Embedding
 
-Pipeline CLI untuk mengkonversi artikel ilmiah PDF ke vector embeddings di Qdrant.
+PEDE adalah project RAG sederhana untuk mengubah artikel ilmiah PDF menjadi vector embedding yang bisa dicari secara semantik. Project ini cocok untuk eksperimen pencarian dokumen ilmiah, chatbot berbasis jurnal, atau backend retrieval untuk aplikasi AI.
 
-```
-PDF → Markdown → Smart Chunking + Metadata → Embedding → Qdrant Vector DB
-```
+Alur utama:
 
-cek hasil chunking:
-
-```sh
-python dump_chunks.py --doi "10.1016/j.inpa.2026.02.006"
+```text
+PDF -> Markdown -> Metadata -> Chunking -> Embedding Transformer -> Qdrant -> Search/API/RAG
 ```
 
-> **📖 BACA DOKUMENTASI LENGKAP API:** Silakan cek file [API_REFERENCE.md](API_REFERENCE.md) untuk melihat daftar lengkap *endpoint* dan cara melakukan RAG via HTTP!
+## Fungsi Project
 
-## Quick Start
+Project ini melakukan beberapa tahap:
 
-### 1. Install Dependencies
+1. Mengubah PDF menjadi Markdown menggunakan `pymupdf4llm`.
+2. Mengambil metadata artikel seperti judul, author, DOI, abstract, jumlah halaman, dan jurnal.
+3. Memecah isi artikel menjadi chunk berdasarkan heading Markdown dan ukuran teks.
+4. Membuat embedding menggunakan model Transformer `sentence-transformers/all-MiniLM-L6-v2`.
+5. Menyimpan embedding dan metadata ke Qdrant.
+6. Menyediakan pencarian semantik melalui CLI atau REST API FastAPI.
+7. Menyediakan contoh RAG dengan Gemini melalui `testrag.py`.
 
-```bash
+## Struktur File Penting
+
+| File | Fungsi |
+| --- | --- |
+| `ingest.py` | Pipeline utama untuk ingest PDF ke Qdrant |
+| `api.py` | Server FastAPI untuk pencarian semantik |
+| `testrag.py` | Contoh RAG: ambil konteks dari Qdrant lalu kirim ke Gemini |
+| `dump_chunks.py` | Ekspor chunk dari Qdrant ke JSON |
+| `core/pdf_converter.py` | Konversi PDF ke Markdown |
+| `core/metadata_extractor.py` | Ekstraksi metadata artikel |
+| `core/chunker.py` | Pemecahan Markdown menjadi chunk |
+| `core/vector_store.py` | Embedding dan operasi Qdrant |
+
+## Model Embedding
+
+Project ini menggunakan:
+
+```text
+sentence-transformers/all-MiniLM-L6-v2
+```
+
+Model ini berbasis Transformer, ringan, cepat, dan menghasilkan vektor berdimensi 384. Jika sebelumnya database dibuat dengan `BAAI/bge-m3`, hapus atau gunakan folder Qdrant baru karena dimensi vektor lama berbeda.
+
+Contoh:
+
+```powershell
+Remove-Item -Recurse -Force .\qdrant_db
+```
+
+Jalankan perintah hapus database hanya jika Anda memang ingin mengulang ingest dari awal.
+
+## Instalasi
+
+Masuk ke folder project:
+
+```powershell
+cd d:\Kuliah\AI\pede
+```
+
+Buat virtual environment:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+Install dependency:
+
+```powershell
 pip install -r requirements.txt
 ```
 
-### 2. Konfigurasi Qdrant (Lokal vs Cloud)
+Salin konfigurasi environment:
 
-Secara bawaan (*default*), *database* akan disimpan di folder lokal `./qdrant_db`. 
-Namun, jika Anda ingin menggunakan **Qdrant Cloud** untuk skalabilitas (agar Colab dan Lokal terhubung ke *database* yang sama), Anda cukup menyalin file `.env`:
-
-```bash
-cp .env.example .env
+```powershell
+Copy-Item .env.example .env
 ```
-Kemudian isi file `.env` tersebut dengan *Endpoint URL* dan *API Key* Anda:
+
+Default project memakai Qdrant lokal:
+
+```ini
+QDRANT_PATH="./qdrant_db"
+```
+
+Jika ingin memakai Qdrant Cloud, isi:
+
 ```ini
 QDRANT_URL="https://xxx.cloud.qdrant.io"
 QDRANT_API_KEY="api_key_anda"
 ```
 
-### 3. Ingesting PDFs
+## Cara Mencoba
 
-```bash
-# Single file
-python ingest.py paper.pdf
+### 1. Ingest PDF
 
-# Entire directory
-python ingest.py ./papers/
+Single file:
 
-# Multiple files
-python ingest.py paper1.pdf paper2.pdf paper3.pdf
+```powershell
+python ingest.py .\paper.pdf
 ```
 
-### 4. Check Results
+Folder berisi banyak PDF:
 
-```bash
-# List all ingested articles
+```powershell
+python ingest.py .\papers\
+```
+
+Multiple file:
+
+```powershell
+python ingest.py .\paper1.pdf .\paper2.pdf
+```
+
+Output proses ingest akan membuat:
+
+| Folder | Isi |
+| --- | --- |
+| `data/markdown` | Hasil konversi PDF ke Markdown |
+| `data/images` | Gambar dari PDF jika ada |
+| `data/metadata` | Metadata artikel dalam JSON |
+| `qdrant_db` | Database vektor lokal |
+
+### 2. Cek Database
+
+Lihat artikel yang sudah masuk:
+
+```powershell
 python ingest.py --list
+```
 
-# Collection statistics
+Lihat statistik collection:
+
+```powershell
 python ingest.py --info
-
-# Test search
-python ingest.py --search "neurosymbolic AI"
 ```
 
-## Architecture
+### 3. Tes Search dari CLI
 
-| Stage | Tool | Output |
-|-------|------|--------|
-| PDF → Markdown | `pymupdf4llm` | Structured markdown with headings |
-| Metadata Extraction | 3-layer (PDF + Regex + CrossRef API) | Title, authors, DOI, abstract, etc. |
-| Chunking | Hybrid (Header + Recursive) | ~1000 char chunks with section metadata |
-| Embedding | `sentence-transformers` (BAAI/bge-m3) | 1024-dim vectors (8192 context, Multi-lingual) |
-| Storage | Qdrant | Vectors + rich payload metadata |
+Cari di semua artikel:
 
-## 🌟 Advanced SOTA Features (Baru)
-1. **Content-Based Deduplication**: Mencegah duplikasi artikel walaupun nama file PDF diubah-ubah. ID artikel dihasilkan secara deterministik menggunakan kombinasi DOI artikel atau _SHA-256 Byte Hash_ dari file.
-2. **Page Boundary Stitching**: Otomatis menghapus nomor halaman dan _header/footer_ yang menyela kalimat di tengah perpindahan halaman PDF, lalu menyambungkan kalimat yang terputus.
-3. **Reference Dropping**: Otomatis melewati (skip) bagian Daftar Pustaka untuk mencegah polusi _Semantic Search_ (kecuali flag `--include-references` diaktifkan).
-4. **Table Cleanup**: Membersihkan artefak ekstraksi tabel untuk membantu LLM bernalar pada data sel.
-
-## Chunk Metadata
-
-Each chunk stored in Qdrant carries:
-
-- `article_id` — UUID per artikel (untuk filter retrieval)
-- `title`, `authors`, `doi` — identitas artikel
-- `section_header` — "Introduction", "Methods", "Results", dll
-- `section_hierarchy` — "Methods > Data Collection > Survey"
-- `content_type` — "text", "table", "references", "figure_caption"
-- `chunk_index` / `total_chunks` — posisi dalam dokumen
-
-## CLI Options
-
-```
-python ingest.py [paths] [options]
-
-positional:
-  paths                  PDF file(s) or directory
-
-options:
-  --qdrant-path PATH     Qdrant local DB path (default: ./qdrant_db)
-  --collection NAME      Collection name (default: scientific_articles)
-  --chunk-size N         Max chunk size in chars (default: 1000)
-  --chunk-overlap N      Chunk overlap in chars (default: 200)
-  --list                 List articles in Qdrant
-  --info                 Show collection stats
-  --search QUERY         Test search
-  --doi DOI              Filter search results by DOI
-  --include-references   Include references (default is to SKIP them)
+```powershell
+python ingest.py --search "apa metode utama penelitian ini?"
 ```
 
-**Contoh Pencarian via CLI:**
-```bash
-# Pencarian global (semua jurnal)
-python ingest.py --search "Apa itu neurosymbolic?"
+Cari berdasarkan DOI:
 
-# Pencarian spesifik ke 1 jurnal menggunakan DOI
-python ingest.py --search "Apa hasil eksperimennya?" --doi "10.1016/j.inpa.2026.02.006"
+```powershell
+python ingest.py --search "apa hasil eksperimennya?" --doi "10.xxxx/xxxx"
 ```
 
-## 🤖 Integration with Golang Agentic AI
+### 4. Jalankan API
 
-Proyek ini telah dilengkapi dengan purwarupa **Agentic AI** berbasis Golang di dalam folder `agent-go/`. 
+```powershell
+python api.py
+```
 
-Agen Golang ini menggunakan SDK `github.com/google/generative-ai-go` dan dilengkapi kemampuan **Function Calling** (Tools). Ia tidak memanggil Qdrant secara langsung, melainkan menggunakan API Server Python (`api.py`) sebagai jembatan.
+Buka dokumentasi interaktif:
 
-### Arsitektur Agentic RAG
-1. **User Prompt:** Anda bertanya *"Apa hasil eksperimen jurnal X?"* di terminal Golang.
-2. **Gemini Reasoning:** LLM Gemini menyadari bahwa itu adalah pertanyaan akademis, lalu ia memutuskan untuk menggunakan fungsi `query_scientific_database`.
-3. **Golang Action:** Golang menangkap permintaan fungsi tersebut, lalu mengirim HTTP POST `{"query": "...", "doi": "..."}` ke `http://localhost:8000/search`.
-4. **Python RAG:** FastAPI meng-embed *query* via BGE-M3, mencari 5 *chunks* terdekat di Qdrant, dan mengembalikannya ke Golang.
-5. **Synthesis:** Golang menyodorkan 5 *chunks* tersebut ke Gemini, dan Gemini merangkumnya menjadi jawaban akhir yang sangat akurat.
+```text
+http://localhost:8000/docs
+```
 
-### Cara Menjalankan Agen Golang
-1. Pastikan server API Python berjalan:
-   ```bash
-   uvicorn api:app --port 8000
-   ```
-2. Buka terminal baru, masuk ke folder `agent-go`:
-   ```bash
-   cd agent-go
-   ```
-3. Set *environment variable* untuk Gemini API Key Anda:
-   ```bash
-   # Windows PowerShell
-   $env:GEMINI_API_KEY="AIzaSy..."
-   ```
-4. Jalankan agen:
-   ```bash
-   go run .
-   ```
+Endpoint utama:
 
-Selamat bereksperimen dengan Agentic RAG Anda!
+| Method | URL | Fungsi |
+| --- | --- | --- |
+| `GET` | `/` | Health check |
+| `POST` | `/search` | Pencarian semantik |
 
-## License
+Contoh request `/search`:
+
+```json
+{
+  "query": "apa kontribusi utama paper ini?",
+  "limit": 5,
+  "doi": "10.xxxx/xxxx"
+}
+```
+
+### 5. Jalankan Contoh RAG Gemini
+
+Set API key Gemini:
+
+```powershell
+$env:GEMINI_API_KEY="API_KEY_ANDA"
+```
+
+Edit nilai `QUERY` dan `DOI_TARGET` di `testrag.py`, lalu jalankan:
+
+```powershell
+python testrag.py
+```
+
+Script ini akan:
+
+1. Mencari chunk relevan di Qdrant.
+2. Menyusun konteks dari hasil pencarian.
+3. Mengirim konteks dan pertanyaan ke Gemini.
+4. Menampilkan jawaban berdasarkan isi dokumen.
+
+## Tahapan Memahami Project
+
+Urutan belajar yang disarankan:
+
+1. Baca `README.md` ini untuk memahami gambaran besar.
+2. Buka `ingest.py` untuk melihat pipeline utama dari PDF sampai masuk Qdrant.
+3. Buka `core/pdf_converter.py` untuk memahami konversi PDF ke Markdown.
+4. Buka `core/metadata_extractor.py` untuk memahami ekstraksi DOI, judul, author, dan metadata lain.
+5. Buka `core/chunker.py` untuk memahami strategi pemecahan teks.
+6. Buka `core/vector_store.py` untuk memahami embedding dan pencarian Qdrant.
+7. Buka `api.py` untuk memahami cara project ini dipakai oleh aplikasi lain.
+8. Buka `testrag.py` untuk memahami bentuk RAG sederhana.
+
+## Catatan Penting
+
+- Model embedding pertama kali akan diunduh dari Hugging Face jika belum ada di cache lokal.
+- Jika model embedding diganti, database Qdrant lama biasanya perlu dibuat ulang karena ukuran vektor bisa berubah.
+- Ekstraksi metadata akan lebih baik jika PDF memiliki DOI dan koneksi internet tersedia untuk CrossRef.
+- Untuk dokumen Indonesia-Inggris campuran, model MiniLM lebih cepat tetapi tidak sekuat model multilingual besar seperti BGE-M3.
+
+## Lisensi
 
 GNU GPL v3

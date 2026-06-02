@@ -2,6 +2,9 @@ import os
 import sys
 import httpx
 from core.vector_store import VectorStore
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # 1. Pastikan API Key tersedia di environment
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -20,8 +23,8 @@ if not GEMINI_API_KEY:
     sys.exit(1)
 
 # 2. Pengaturan Pencarian
-QUERY = "Apa hasil eksperimen utamanya dan berapa persen akurasinya?"
-DOI_TARGET = "10.1016/j.inpa.2026.02.006"
+QUERY = "Apa kontribusi utama dari paper ini?
+DOI_TARGET = "10.1016/j.undsp.2024.04.008"
 LIMIT_CHUNKS = 5
 
 print(f"[SEARCH] Mencari jawaban di Qdrant untuk DOI: {DOI_TARGET}")

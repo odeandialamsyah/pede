@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 # === Configuration ===
 COLLECTION_NAME = "scientific_articles"
-EMBEDDING_MODEL = "BAAI/bge-m3"  # 8192 context window, 1024 dimensions, Multi-lingual
+EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"  # Transformer encoder, 384 dimensions
 
 # Qdrant Database Settings (Local or Cloud)
 QDRANT_PATH = os.environ.get("QDRANT_PATH", "./qdrant_db")
