@@ -80,6 +80,36 @@ def process_single_pdf(
     start_time = time.time()
     
     try:
+        # === Step 0: Early Deduplication Check ===
+        from core.metadata_extractor import extract_doi
+        import hashlib
+        import uuid
+        
+        logger.info("[0/4] Checking early deduplication...")
+        pdf_native_meta = get_pdf_native_metadata(pdf_path)
+        first_page = pdf_native_meta.get("first_page_text", "")
+        doi_cand = extract_doi(first_page)
+        
+        possible_ids = []
+        if doi_cand:
+            possible_ids.append(str(uuid.uuid5(uuid.NAMESPACE_URL, doi_cand)))
+            
+        hasher = hashlib.sha256()
+        with open(pdf_path, 'rb') as f:
+            for byte_chunk in iter(lambda: f.read(4096), b""):
+                hasher.update(byte_chunk)
+        file_hash_id = str(uuid.uuid5(uuid.NAMESPACE_URL, hasher.hexdigest()))
+        possible_ids.append(file_hash_id)
+        
+        for cand_id in possible_ids:
+            if vector_store.article_exists(cand_id):
+                logger.info(f"  -> Article already exists in DB (ID: {cand_id}).")
+                logger.info("  -> SKIPPING conversion to save compute! ✅")
+                return ArticleMetadata(
+                    article_id=cand_id, 
+                    title=pdf_native_meta.get("title") or "Existing Article (Cached)",
+                    filename=filename
+                )
         # === Step 1: PDF -> Markdown ===
         logger.info("[1/4] Converting PDF to Markdown...")
         markdown_text = convert_pdf_to_markdown(

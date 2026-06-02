@@ -125,6 +125,17 @@ class VectorStore:
             logger.info(f"Created collection: {self.collection_name}")
         else:
             logger.info(f"Collection already exists: {self.collection_name}")
+            
+        # Ensure payload index for article_id (required by Qdrant Cloud for count filters)
+        try:
+            self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="article_id",
+                field_schema="keyword",
+            )
+            logger.info("Ensured payload index on 'article_id'.")
+        except Exception as e:
+            logger.debug(f"Payload index creation note (might already exist): {e}")
     
     def add_chunks(self, chunks: list[Chunk], batch_size: int = 64) -> int:
         """
@@ -205,6 +216,53 @@ class VectorStore:
         )
         logger.info(f"Deleted all chunks for article {article_id}")
         return True
+    
+    def article_exists(self, article_id: str) -> bool:
+        """Check if an article is already fully ingested in Qdrant and validates its integrity."""
+        # Check how many chunks exist for this article
+        result = self.client.count(
+            collection_name=self.collection_name,
+            count_filter=Filter(
+                must=[
+                    FieldCondition(
+                        key="article_id",
+                        match=MatchValue(value=article_id),
+                    )
+                ]
+            ),
+            exact=True,
+        )
+        
+        count = result.count
+        if count == 0:
+            return False
+            
+        # If chunks exist, verify they are complete by checking one chunk's metadata
+        points, _ = self.client.scroll(
+            collection_name=self.collection_name,
+            scroll_filter=Filter(
+                must=[
+                    FieldCondition(
+                        key="article_id",
+                        match=MatchValue(value=article_id),
+                    )
+                ]
+            ),
+            limit=1,
+            with_payload=["total_chunks"],
+            with_vectors=False,
+        )
+        
+        if points:
+            expected_chunks = points[0].payload.get("total_chunks", 0)
+            if expected_chunks > 0 and count >= expected_chunks:
+                return True
+                
+            # Corrupted/partial state detected
+            logger.warning(f"Detected partial insertion for article {article_id} ({count}/{expected_chunks} chunks). Cleaning up for re-processing...")
+            self.delete_article(article_id)
+            
+        return False
     
     def get_collection_info(self) -> dict:
         """Get collection statistics."""
