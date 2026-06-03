@@ -1,0 +1,29 @@
+[
+  {
+    "id": "q1",
+    "query_type": "factoid",
+    "query": "What is the main contribution of this paper?",
+    "doi": "10.1016/j.undsp.2024.04.008",
+    "expected_terms": ["contribution"],
+    "match": "any",
+    "notes": "Ganti expected_terms dengan kata/frasa jawaban yang benar dari paper Anda."
+  },
+  {
+    "id": "q2",
+    "query_type": "method",
+    "query": "What method is proposed in this paper?",
+    "doi": "10.1016/j.undsp.2024.04.008",
+    "expected_terms": ["method", "proposed"],
+    "match": "any",
+    "notes": "Gunakan istilah yang benar-benar muncul di chunk jawaban."
+  },
+  {
+    "id": "q3",
+    "query_type": "result",
+    "query": "What are the main experimental results?",
+    "doi": "10.1016/j.undsp.2024.04.008",
+    "expected_terms": ["result", "accuracy", "performance"],
+    "match": "any",
+    "notes": "Jika paper tidak membahas akurasi, ubah expected_terms sesuai metrik paper."
+  }
+]

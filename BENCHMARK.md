@@ -33,6 +33,85 @@ Untuk mengevaluasi ketangguhan sistem pencarian secara komprehensif, pengujian (
 | 1000 | 200 | Statis | sentence-transformers/all-MiniLM-L6-v2 | Hanya Inggris | Factoid | 5 | Tidak | - | - | - | *MiniLM: Sangat cepat tapi buruk di bahasa Indonesia* |
 | 1000 | 200 | Semantic | nomic-ai/nomic-embed-text-v1.5 | Mayoritas Inggris | Conversational | 5 | Ya (DOI) | - | - | - | *Nomic: Konteks sangat panjang* |
 
+## Benchmark Jumlah Chunk yang Diambil (Top-K)
+
+Untuk mencari jumlah chunk yang optimal saat RAG, uji nilai `Top-K` berbeda pada data dan query yang sama. `Top-K` adalah jumlah chunk yang dikirim dari Qdrant ke LLM/Gemini.
+
+Panduan lengkap tersedia di:
+
+```text
+docs/BENCHMARK_GUIDE.md
+```
+
+Skrip yang digunakan:
+
+```powershell
+python scripts\benchmark_retrieval.py --top-k 1,3,5,10
+```
+
+Output dibuat otomatis dalam bentuk tabel:
+
+```text
+benchmark_results/retrieval_benchmark.md
+benchmark_results/retrieval_benchmark.csv
+```
+
+File query uji default ada di:
+
+```text
+benchmark_queries.example.json
+```
+
+Sebelum dipakai serius, salin atau edit file tersebut lalu isi `expected_terms` dengan kata/frasa jawaban yang benar dari paper Anda. Contoh:
+
+```json
+{
+  "id": "q1",
+  "query_type": "method",
+  "query": "What method is proposed in this paper?",
+  "doi": "10.1016/j.undsp.2024.04.008",
+  "expected_terms": ["nama metode utama"],
+  "match": "any"
+}
+```
+
+Makna kolom hasil:
+
+| Kolom | Makna |
+| --- | --- |
+| `collection` | Nama collection Qdrant yang diuji |
+| `total_chunks_db` | Total chunk yang tersimpan di collection |
+| `top_k` | Jumlah chunk yang diambil dari Qdrant |
+| `hit_rate` | Persentase query yang menemukan `expected_terms` di hasil retrieval |
+| `mrr` | Mean Reciprocal Rank; makin dekat ke 1 makin baik karena jawaban muncul di ranking atas |
+| `avg_latency_ms` | Rata-rata waktu pencarian |
+
+## Benchmark Ukuran Chunk Ingest
+
+Jika ingin membandingkan ukuran chunk `500`, `1000`, dan `1500`, buat collection berbeda agar hasilnya tidak bercampur:
+
+```powershell
+python ingest.py .\papers\ --collection chunks_500 --chunk-size 500 --chunk-overlap 100
+python ingest.py .\papers\ --collection chunks_1000 --chunk-size 1000 --chunk-overlap 200
+python ingest.py .\papers\ --collection chunks_1500 --chunk-size 1500 --chunk-overlap 300
+```
+
+Lalu bandingkan collection tersebut dengan query uji yang sama:
+
+```powershell
+python scripts\benchmark_retrieval.py --collections chunks_500,chunks_1000,chunks_1500 --top-k 1,3,5,10
+```
+
+Interpretasi cepat:
+
+| Pola Hasil | Kesimpulan |
+| --- | --- |
+| `hit_rate` naik saat `top_k` naik, tapi latensi masih aman | Gunakan `top_k` lebih besar |
+| `hit_rate` sama antara `top_k=5` dan `top_k=10` | Pilih `top_k=5` karena lebih hemat konteks |
+| `chunks_500` hit rate tinggi tapi latensi/konteks besar | Chunk kecil bagus untuk recall, tetapi boros konteks |
+| `chunks_1500` hit rate rendah | Chunk terlalu besar; embedding menjadi kurang spesifik |
+| MRR tinggi pada `chunks_1000` | Biasanya konfigurasi ini paling seimbang |
+
 ## Panduan Pengisian Benchmarking
 
 Evaluasi Sistem *Retrieval* (Pengambilan Data) adalah nyawa dari arsitektur RAG. Berikut adalah penjelasan ringkas mengapa kolom-kolom metrik di atas sangat penting untuk dipantau dalam fase eksperimen Anda:

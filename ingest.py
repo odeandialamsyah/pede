@@ -63,7 +63,11 @@ def setup_directories():
 
 
 def process_single_pdf(
-    pdf_path: str, vector_store: VectorStore, include_references: bool = False
+    pdf_path: str,
+    vector_store: VectorStore,
+    include_references: bool = False,
+    chunk_size: int = 1000,
+    chunk_overlap: int = 200,
 ) -> ArticleMetadata | None:
     """
     Process a single PDF through the full pipeline:
@@ -143,7 +147,12 @@ def process_single_pdf(
         
         # === Step 3: Chunking ===
         logger.info("[3/4] Chunking markdown...")
-        chunks = chunk_markdown(markdown_text, article_meta)
+        chunks = chunk_markdown(
+            markdown_text,
+            article_meta,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
         
         if not include_references:
             original_count = len(chunks)
@@ -332,7 +341,13 @@ Examples:
     results = []
     for i, pdf_path in enumerate(pdf_paths, 1):
         logger.info(f"\n[{i}/{len(pdf_paths)}]")
-        meta = process_single_pdf(pdf_path, vector_store, args.include_references)
+        meta = process_single_pdf(
+            pdf_path,
+            vector_store,
+            args.include_references,
+            chunk_size=args.chunk_size,
+            chunk_overlap=args.chunk_overlap,
+        )
         results.append((pdf_path, meta))
     
     # === Summary ===

@@ -227,5 +227,7 @@ qdrant_db/
 qdrant_db_hasil.zip
 pede_colab.zip
 hasil_chunking.json
+benchmark_results/
 *.pdf
 *.json
+!benchmark_queries.example.json
