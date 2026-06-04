@@ -10,11 +10,17 @@ Tumpang Tindih (Overlap): 0%, 10%, 25%.
 Metode: Pemotongan statis (jumlah karakter fix) vs Pemotongan sintaksis (berhenti di titik/akhir paragraf) vs Semantic Chunking (berhenti saat topik berubah).
 
 ### B. Representasi Vektor (Embedding Model)
-Model embedding menentukan kualitas pemahaman semantik dari database.
+Pada benchmark awal ini, model embedding dibuat **tetap** agar hasil uji chunk lebih adil.
 
-Dimensi Vektor: Membandingkan model dimensi kecil (misal: 384 dimensi pada MiniLM) versus dimensi besar (misal: 1536 dimensi pada OpenAI atau 1024 pada BGE-M3).
+Model yang digunakan:
 
-Tipe Model: Model dense standar vs model multi-bahasa (jika dokumen Anda berbahasa Indonesia).
+```text
+sentence-transformers/all-MiniLM-L6-v2
+```
+
+Alasannya: tujuan benchmark saat ini adalah melihat pengaruh **jumlah chunk yang diambil (Top-K)**, bukan membandingkan model embedding. Jika model embedding ikut diganti, hasil akan sulit dibaca karena kita tidak tahu peningkatan berasal dari chunking atau dari model embedding.
+
+Perbandingan model seperti `BAAI/bge-m3`, `nomic-ai/nomic-embed-text-v1.5`, atau embedding API lain sebaiknya dilakukan pada tahap lanjutan setelah konfigurasi chunk terbaik ditemukan.
 
 ### C. Variasi Tipe Query (Query Diversity)
 Untuk mengevaluasi ketangguhan sistem pencarian secara komprehensif, pengujian (metrik *Hit Rate*) harus menggunakan variasi kueri berikut:
@@ -24,14 +30,51 @@ Untuk mengevaluasi ketangguhan sistem pencarian secara komprehensif, pengujian (
 3. **Paraphrased/Semantic Query:** Pertanyaan yang sengaja TIDAK menggunakan istilah yang ada di dalam teks, tetapi maknanya sama. Ini adalah ujian sesungguhnya bagi sebuah *Vector Database*.
 4. **Conversational/Noisy Query:** Pertanyaan dengan gaya bahasa kasual, tidak baku, atau mengandung sedikit *typo*, menyerupai ketikan pengguna asli di dunia nyata.
 
-## Hasil Benchmarking
+## Hasil Benchmarking Saat Ini
 
-| Ukuran Chunk | Overlap | Metode Chunking | Model Embedding | Dukungan Bahasa | Tipe Query Uji | Top-K | Filter Metadata | Hit Rate | Latensi | Ukuran Index DB | Catatan |
-|:---:|:---:|:---|:---|:---|:---|:---:|:---:|:---:|:---:|:---:|:---|
-| 1000 | 200 | Hybrid | BAAI/bge-m3 | Multi-bahasa (>100) | Semantic/Paraphrased | 5 | Ya (DOI) | - | - | - | *BGE-M3: Juara untuk kueri lintas bahasa* |
-| 500 | 100 | Hybrid | BAAI/bge-m3 | Multi-bahasa (>100) | Reasoning/Complex | 10 | Ya (DOI) | - | - | - | *Eksperimen: Chunk kecil, Top-K besar* |
-| 1000 | 200 | Statis | sentence-transformers/all-MiniLM-L6-v2 | Hanya Inggris | Factoid | 5 | Tidak | - | - | - | *MiniLM: Sangat cepat tapi buruk di bahasa Indonesia* |
-| 1000 | 200 | Semantic | nomic-ai/nomic-embed-text-v1.5 | Mayoritas Inggris | Conversational | 5 | Ya (DOI) | - | - | - | *Nomic: Konteks sangat panjang* |
+Benchmark ini menguji retrieval dengan **embedding Transformer saja**, tanpa Gemini. Variabel yang diuji adalah `Top-K`, yaitu jumlah chunk yang diambil dari Qdrant.
+
+Konfigurasi uji:
+
+| Komponen | Nilai |
+| --- | --- |
+| Collection | `scientific_articles` |
+| Total chunk di DB | `109` |
+| Model embedding | `sentence-transformers/all-MiniLM-L6-v2` |
+| Metode chunking | Hybrid Markdown header + recursive splitter |
+| Filter metadata | Ya, filter DOI |
+| DOI target | `10.1016/j.undsp.2024.04.008` |
+| Jumlah query uji | `3` |
+| File hasil | `benchmark_results/retrieval_benchmark.md` |
+
+Ringkasan hasil:
+
+| Top-K | Jumlah Query | Hit Rate | MRR | Rata-rata Latensi | Kesimpulan |
+| ---: | ---: | ---: | ---: | ---: | --- |
+| `1` | `3` | `0.0%` | `0.000` | `91.5 ms` | Terlalu sedikit; belum menemukan chunk jawaban |
+| `3` | `3` | `0.0%` | `0.000` | `133.1 ms` | Masih belum cukup; jawaban belum muncul di 3 chunk teratas |
+| `5` | `3` | `33.3%` | `0.083` | `47.7 ms` | Mulai menemukan jawaban, tetapi belum stabil |
+
+Detail penting dari hasil:
+
+| Query | Top-K Berhasil | Ranking Chunk Jawaban | Catatan |
+| --- | ---: | ---: | --- |
+| `q1` - main contribution | - | - | Belum menemukan expected terms |
+| `q2` - proposed method | - | - | Belum menemukan expected terms |
+| `q3` - experimental results | `5` | `4` | Jawaban baru muncul pada ranking ke-4 |
+
+Kesimpulan sementara:
+
+```text
+Top-K=5 adalah hasil terbaik dari pengujian Top-K 1, 3, dan 5.
+Namun Top-K=5 belum bisa disebut optimal karena hit rate masih 33.3%.
+```
+
+Rekomendasi berikutnya:
+
+1. Uji `Top-K=10` dan `Top-K=15`.
+2. Perbaiki `expected_terms` agar memakai istilah spesifik dari paper, bukan kata umum.
+3. Setelah Top-K terbaik ditemukan, baru lanjutkan benchmark ukuran chunk seperti `500`, `1000`, dan `1500`.
 
 ## Benchmark Jumlah Chunk yang Diambil (Top-K)
 
