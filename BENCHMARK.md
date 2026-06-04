@@ -32,49 +32,91 @@ Untuk mengevaluasi ketangguhan sistem pencarian secara komprehensif, pengujian (
 
 ## Hasil Benchmarking Saat Ini
 
-Benchmark ini menguji retrieval dengan **embedding Transformer saja**, tanpa Gemini. Variabel yang diuji adalah `Top-K`, yaitu jumlah chunk yang diambil dari Qdrant.
+Benchmark ini menguji retrieval dengan **embedding Transformer saja**, tanpa Gemini. Variabel yang diuji adalah:
+
+1. Ukuran chunk saat ingest: `500`, `1000`, dan `1500` karakter.
+2. Jumlah chunk yang diambil saat retrieval: `Top-K = 1, 3, 5, 10, 15, 20`.
 
 Konfigurasi uji:
 
 | Komponen | Nilai |
 | --- | --- |
-| Collection | `scientific_articles` |
-| Total chunk di DB | `109` |
+| Dokumen uji | `papers/1-s2.0-S2467967424000813-main.pdf` |
+| Judul paper | `Hybrid deep learning approach for rock tunnel deformation prediction based on spatio-temporal patterns` |
+| DOI target | `10.1016/j.undsp.2024.04.008` |
 | Model embedding | `sentence-transformers/all-MiniLM-L6-v2` |
+| Dimensi embedding | `384` |
 | Metode chunking | Hybrid Markdown header + recursive splitter |
 | Filter metadata | Ya, filter DOI |
-| DOI target | `10.1016/j.undsp.2024.04.008` |
 | Jumlah query uji | `3` |
-| File hasil | `benchmark_results/retrieval_benchmark.md` |
+| File query | `benchmark_queries.example.json` |
+| File hasil Top-K default | `benchmark_results/retrieval_benchmark_topk.md` |
+| File hasil chunk comparison | `benchmark_results/retrieval_benchmark_chunks.md` |
 
-Ringkasan hasil:
+### Ringkasan Collection
 
-| Top-K | Jumlah Query | Hit Rate | MRR | Rata-rata Latensi | Kesimpulan |
-| ---: | ---: | ---: | ---: | ---: | --- |
-| `1` | `3` | `0.0%` | `0.000` | `91.5 ms` | Terlalu sedikit; belum menemukan chunk jawaban |
-| `3` | `3` | `0.0%` | `0.000` | `133.1 ms` | Masih belum cukup; jawaban belum muncul di 3 chunk teratas |
-| `5` | `3` | `33.3%` | `0.083` | `47.7 ms` | Mulai menemukan jawaban, tetapi belum stabil |
+| Collection | Chunk Size | Overlap | Total Chunk | Rata-rata Panjang Chunk | Catatan |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `chunks_500` | `500` | `100` | `203` | sekitar `360` karakter | Chunk lebih kecil, retrieval lebih spesifik |
+| `chunks_1000` | `1000` | `200` | `109` | sekitar `703` karakter | Konfigurasi sedang/default |
+| `chunks_1500` | `1500` | `300` | `71` | sekitar `1104` karakter | Chunk lebih besar, jumlah point lebih sedikit |
 
-Detail penting dari hasil:
+### Tabel Perbandingan Lengkap
 
-| Query | Top-K Berhasil | Ranking Chunk Jawaban | Catatan |
-| --- | ---: | ---: | --- |
-| `q1` - main contribution | - | - | Belum menemukan expected terms |
-| `q2` - proposed method | - | - | Belum menemukan expected terms |
-| `q3` - experimental results | `5` | `4` | Jawaban baru muncul pada ranking ke-4 |
+| Collection | Total Chunk | Top-K | Hit Rate | MRR | Avg Latency | Avg Context Chars |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `chunks_500` | 203 | 1 | 0.0% | 0.000 | 75.7 ms | 209 |
+| `chunks_500` | 203 | 3 | 33.3% | 0.167 | 58.0 ms | 779 |
+| `chunks_500` | 203 | 5 | 66.7% | 0.233 | 53.0 ms | 1494 |
+| `chunks_500` | 203 | 10 | 66.7% | 0.233 | 48.6 ms | 3114 |
+| `chunks_500` | 203 | 15 | 66.7% | 0.233 | 45.9 ms | 4787 |
+| `chunks_500` | 203 | 20 | 66.7% | 0.233 | 45.7 ms | 6351 |
+| `chunks_1000` | 109 | 1 | 0.0% | 0.000 | 44.0 ms | 262 |
+| `chunks_1000` | 109 | 3 | 0.0% | 0.000 | 44.4 ms | 1087 |
+| `chunks_1000` | 109 | 5 | 33.3% | 0.083 | 45.0 ms | 2174 |
+| `chunks_1000` | 109 | 10 | 33.3% | 0.083 | 45.0 ms | 4685 |
+| `chunks_1000` | 109 | 15 | 66.7% | 0.107 | 49.8 ms | 8485 |
+| `chunks_1000` | 109 | 20 | 66.7% | 0.107 | 42.4 ms | 11513 |
+| `chunks_1500` | 71 | 1 | 0.0% | 0.000 | 49.0 ms | 275 |
+| `chunks_1500` | 71 | 3 | 0.0% | 0.000 | 43.8 ms | 1388 |
+| `chunks_1500` | 71 | 5 | 66.7% | 0.150 | 44.9 ms | 3639 |
+| `chunks_1500` | 71 | 10 | 66.7% | 0.150 | 45.8 ms | 8032 |
+| `chunks_1500` | 71 | 15 | 66.7% | 0.150 | 41.8 ms | 14214 |
+| `chunks_1500` | 71 | 20 | 66.7% | 0.150 | 46.4 ms | 20321 |
 
-Kesimpulan sementara:
+### Kandidat Terbaik
+
+| Peringkat | Konfigurasi | Hit Rate | MRR | Avg Context Chars | Alasan |
+| ---: | --- | ---: | ---: | ---: | --- |
+| `1` | `chunks_500`, `Top-K=5` | `66.7%` | `0.233` | `1494` | Hit rate maksimum, MRR tertinggi, konteks masih paling hemat di antara konfigurasi maksimum |
+| `2` | `chunks_1500`, `Top-K=5` | `66.7%` | `0.150` | `3639` | Hit rate sama, tetapi konteks lebih panjang dan MRR lebih rendah |
+| `3` | `chunks_1000`, `Top-K=15` | `66.7%` | `0.107` | `8485` | Hit rate sama, tetapi jawaban muncul lebih rendah dan konteks jauh lebih besar |
+
+### Kesimpulan Optimal Sementara
 
 ```text
-Top-K=5 adalah hasil terbaik dari pengujian Top-K 1, 3, dan 5.
-Namun Top-K=5 belum bisa disebut optimal karena hit rate masih 33.3%.
+Konfigurasi optimal sementara:
+- Embedding model: sentence-transformers/all-MiniLM-L6-v2
+- Chunk size: 500
+- Chunk overlap: 100
+- Collection: chunks_500
+- Top-K: 5
 ```
 
-Rekomendasi berikutnya:
+Alasan:
 
-1. Uji `Top-K=10` dan `Top-K=15`.
-2. Perbaiki `expected_terms` agar memakai istilah spesifik dari paper, bukan kata umum.
-3. Setelah Top-K terbaik ditemukan, baru lanjutkan benchmark ukuran chunk seperti `500`, `1000`, dan `1500`.
+1. `chunks_500 + Top-K=5` mencapai hit rate tertinggi, yaitu `66.7%`.
+2. MRR paling tinggi, yaitu `0.233`, artinya chunk jawaban muncul lebih dekat ke ranking atas.
+3. Menambah Top-K ke `10`, `15`, atau `20` tidak menaikkan hit rate maupun MRR.
+4. Konteks `Top-K=5` jauh lebih hemat dibanding Top-K lebih besar.
+
+Catatan batasan:
+
+1. Query `q1` tentang kontribusi utama belum berhasil pada semua konfigurasi.
+2. Jumlah query uji masih sedikit, yaitu `3`.
+3. `expected_terms` masih perlu dibuat lebih spesifik agar penilaian lebih kuat.
+
+Kesimpulan ini valid untuk data uji saat ini. Untuk klaim yang lebih kuat, tambahkan minimal `5-10` query uji dengan `expected_terms` yang benar-benar spesifik dari isi paper.
 
 ## Benchmark Jumlah Chunk yang Diambil (Top-K)
 
