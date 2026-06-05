@@ -66,8 +66,8 @@ def process_single_pdf(
     pdf_path: str,
     vector_store: VectorStore,
     include_references: bool = False,
-    chunk_size: int = 1000,
-    chunk_overlap: int = 200,
+    chunk_size: int = 500,
+    chunk_overlap: int = 100,
 ) -> ArticleMetadata | None:
     """
     Process a single PDF through the full pipeline:
@@ -233,14 +233,14 @@ Examples:
     parser.add_argument(
         "--chunk-size",
         type=int,
-        default=1000,
-        help="Max chunk size in chars (default: 1000)",
+        default=500,
+        help="Max chunk size in chars (default: 500, benchmark-best)",
     )
     parser.add_argument(
         "--chunk-overlap",
         type=int,
-        default=200,
-        help="Chunk overlap in chars (default: 200)",
+        default=100,
+        help="Chunk overlap in chars (default: 100, benchmark-best)",
     )
     parser.add_argument(
         "--list",
